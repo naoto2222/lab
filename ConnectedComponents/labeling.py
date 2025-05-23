@@ -39,7 +39,7 @@ def draw_centroids(src_img, centroids):
 if __name__ == "__main__":
     
     src_img = cv2.imread("test1.jpg")
-    ret, bin_img = binarize(src_img, 78, cv2.THRESH_OTSU)
+    ret, bin_img = binarize(src_img, 45, cv2.THRESH_BINARY)
     #kernel = np.ones((3,3),np.uint8)
     #opening = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, kernel)#オープニング
     print("ret"+str(ret))
@@ -50,6 +50,6 @@ if __name__ == "__main__":
     centroids_img = draw_centroids(stats_img, centroids)
 
     cv2.imwrite("labels.png", put_color_to_objects(src_img, labels))
-    #cv2.imwrite("bin_img_opening.png", opening)
+    cv2.imwrite("bin_img.png", bin_img)
     cv2.imwrite("stats_img.png", stats_img)
-    cv2.imwrite("centroids_img.png", centroids_img)
+    #cv2.imwrite("centroids_img.png", centroids_img)
