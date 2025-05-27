@@ -39,9 +39,10 @@ def draw_centroids(src_img, centroids):
 if __name__ == "__main__":
     
     src_img = cv2.imread("test1.jpg")
-    ret, bin_img = binarize(src_img, 45, cv2.THRESH_BINARY)
-    #kernel = np.ones((3,3),np.uint8)
-    #opening = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, kernel)#オープニング
+    ret, bin_img = binarize(src_img, 40, cv2.THRESH_BINARY)
+    kernel = np.ones((3,3),np.uint8)
+    opening = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, kernel)#オープニング
+    bin_img = opening
     print("ret"+str(ret))
     retval, labels, stats, centroids = cv2.connectedComponentsWithStats(bin_img)
     print(stats)#(左上の x 座標, 左上の y 座標, 幅, 高さ, 面積)
