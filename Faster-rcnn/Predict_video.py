@@ -13,7 +13,7 @@ def predict_video_to_csv():
     OUTPUT_DIR = 'outputs'
     
     # ↓↓↓ 予測したい動画のパスをここに指定してください ↓↓↓
-    VIDEO_PATH = 'data/videos/.mp4'  # 例: 'data/videos/test.mp4'
+    VIDEO_PATH = 'data/videos/your_video.mp4'  # 例: 'data/videos/test.mp4'
 
     # 入力ビデオファイル名から出力ファイル名を生成
     video_filename = os.path.basename(VIDEO_PATH)
@@ -47,7 +47,7 @@ def predict_video_to_csv():
     model.to(device)
     model.eval()
 
-    # --- 3. 動画の準備とデータの一時保存用リスト ---
+    # --- 3. 動画とCSVファイルの準備 ---
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
         print(f"エラー: 動画ファイルが開けません: {VIDEO_PATH}")
@@ -57,10 +57,9 @@ def predict_video_to_csv():
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # または 'XVID' など、環境に合わせて
     video_writer = cv2.VideoWriter(OUTPUT_VIDEO_PATH, fourcc, fps, (frame_width, frame_height))
 
-    # 全フレームの結果を一時的に保存するリスト
     all_frames_results = []
     
     frame_count = 0
@@ -80,31 +79,38 @@ def predict_video_to_csv():
         with torch.no_grad():
             prediction = model(img_tensor)
         
-        # このフレームで検出されたpillarの幅を保存するリスト
         current_frame_widths = []
+        pillar_detection_count_this_frame = 0 # フレームごとのpillarカウンターを初期化
 
         for i in range(len(prediction[0]['scores'])):
             score = prediction[0]['scores'][i].item()
 
             if score > DETECTION_THRESHOLD:
+                box = prediction[0]['boxes'][i].cpu().numpy().astype(int)
                 label_id = prediction[0]['labels'][i].item()
                 class_name = CLASS_NAMES.get(label_id, 'Unknown')
-
-                # 'pillar'クラスの場合のみ処理
+                
+                xmin, ymin, xmax, ymax = box
+                
+                # pillarが検出された場合のみ処理
                 if class_name == 'pillar':
-                    box = prediction[0]['boxes'][i].cpu().numpy().astype(int)
-                    xmin, ymin, xmax, ymax = box
+                    pillar_detection_count_this_frame += 1 # pillarカウンターをインクリメント
                     width = xmax - xmin
                     current_frame_widths.append(width)
                     
-                    # 映像への描画は通常通り行う
+                    # 描画するテキストを「クラス名 + 番号」に変更
+                    text = f"{class_name} {pillar_detection_count_this_frame}"
                     cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                    text = f"{class_name}: {score:.2f}"
                     cv2.putText(frame, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        
-        # フレーム番号と、このフレームで見つかったpillarの幅リストを保存
-        all_frames_results.append([frame_count] + current_frame_widths)
+                else:
+                    # pillar以外の物体はスコア付きで表示（もし必要なら）
+                    # text = f"{class_name}: {score:.2f}"
+                    # cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (255, 0, 0), 2) # 別の色で表示など
+                    # cv2.putText(frame, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+                    pass # pillar以外はCSVに記録しないので、描画も省略する場合はpass
 
+
+        all_frames_results.append([frame_count] + current_frame_widths)
         video_writer.write(frame)
         frame_count += 1
         if frame_count % 30 == 0:
@@ -114,19 +120,16 @@ def predict_video_to_csv():
 
     # --- 5. CSVファイルへの書き出し ---
     print(f"CSVファイルを作成中: {OUTPUT_CSV_PATH}")
-
-    # 最大の列数を決定（frame列 + 最も多くpillarが検出された数）
     max_pillars = 0
     if all_frames_results:
-        max_pillars = max(len(row) for row in all_frames_results) - 1
+        max_pillars = max(len(row) for row in all_frames_results) - 1 # frame番号列を除く
 
-    # ヘッダーを作成
     header = ['frame'] + [f'pillar_{i+1}_width' for i in range(max_pillars)]
 
     with open(OUTPUT_CSV_PATH, 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(header) # ヘッダーを書き込み
-        csv_writer.writerows(all_frames_results) # 全データを一括で書き込み
+        csv_writer.writerow(header)
+        csv_writer.writerows(all_frames_results)
 
     # --- 6. 終了処理 ---
     cap.release()
@@ -138,6 +141,7 @@ def predict_video_to_csv():
     print(f"Pillar幅データCSV: {OUTPUT_CSV_PATH}")
 
 if __name__ == '__main__':
+    # フォルダの準備（なければ作成）
     if not os.path.exists('data/videos'):
         os.makedirs('data/videos')
         print("`data/videos` フォルダを作成しました。ここに動画ファイルを入れてください。")
